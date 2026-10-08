@@ -38,6 +38,26 @@ jobs:
           assignee="$(python -c 'import json; print(json.load(open("upstream-runtime-policy.json", encoding="utf-8"))["promotion"]["drift_issue_assignee"])')"
           marker='<!-- codex-upstream-runtime-drift/v2 -->'
           drift_count="$(python -c 'import json; print(len(json.load(open("upstream-runtime-report.json", encoding="utf-8"))["drifted"]))')"
+          issues_enabled="$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.has_issues')"
+          if [ "${issues_enabled}" = "false" ]; then
+            {
+              echo "## Upstream runtime watcher"
+              if [ "${drift_count}" -gt 0 ]; then
+                echo "GitHub Issues are disabled, so this run did not open or update a drift issue."
+                echo
+                echo '```json'
+                cat upstream-runtime-report.json
+                echo '```'
+              else
+                echo "No runtime drift detected. GitHub Issues are disabled, so issue reconciliation was skipped."
+              fi
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          if [ "${issues_enabled}" != "true" ]; then
+            echo "Unable to determine whether GitHub Issues are enabled." >&2
+            exit 1
+          fi
           gh api --paginate --slurp --method GET "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" > upstream-runtime-open-issues.json
           TITLE="${title}" LABEL="${label}" MARKER="${marker}" python - <<'PY'
           import json
